@@ -7,3 +7,4 @@ seaborn==0.13.2
 plotly==5.17.0
 joblib>=1.4.0
 setuptools>=65.0.0
+xgboost>=2.0.0
