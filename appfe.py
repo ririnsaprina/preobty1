@@ -1,16 +1,47 @@
 import streamlit as st
-import requests
 import joblib
+import numpy as np
 import pandas as pd
 
-# load model
+# Load model
 model = joblib.load('xgbmodel.pkl')
 
-st.title("Prediksi Tingkat Obesitas")
-st.write("Masukkan data gaya hidup untuk mengetahui tingkat risiko obesitas.")
+# Mapping kategori ke angka (sesuai preprocessing saat training)
+def encode_input(
+    gender, age, height, weight, history, favc, fcvc, ncp,
+    caec, smoke, ch2o, scc, faf, tue, calc, mtrans
+):
+    return [
+        1.0 if gender == "Male" else 0.0,
+        float(age),
+        float(height),
+        float(weight),
+        1.0 if history == "yes" else 0.0,
+        1.0 if favc == "yes" else 0.0,
+        float(fcvc),
+        float(ncp),
+        float({"No": 0, "Sometimes": 1, "Frequently": 2, "Always": 3}[caec]),
+        1.0 if smoke == "yes" else 0.0,
+        float(ch2o),
+        1.0 if scc == "yes" else 0.0,
+        float(faf),
+        float(tue),
+        float({"no": 0, "Sometimes": 1, "Frequently": 2, "Always": 3}[calc]),
+        float({
+            "Public_Transportation": 0,
+            "Walking": 1,
+            "Motorbike": 2,
+            "Bike": 3,
+            "Automobile": 4
+        }[mtrans])
+    ]
 
-# Form input
-with st.form("form"):
+# Aplikasi Streamlit
+def main():
+    st.title("Prediksi Tingkat Obesitas")
+    st.write("Masukkan data gaya hidup untuk mengetahui tingkat risiko obesitas.")
+
+    # Form input user
     gender = st.selectbox("Jenis Kelamin", ["Male", "Female"])
     age = st.number_input("Usia", min_value=1, max_value=100, value=25)
     height = st.number_input("Tinggi (meter)", min_value=1.0, max_value=2.5, value=1.7)
@@ -28,36 +59,36 @@ with st.form("form"):
     calc = st.selectbox("Konsumsi alkohol", ["no", "Sometimes", "Frequently", "Always"])
     mtrans = st.selectbox("Moda transportasi", ["Public_Transportation", "Walking", "Motorbike", "Bike", "Automobile"])
 
-    submitted = st.form_submit_button("PREDIKSI")
+    if st.button("Prediksi"):
+        try:
+            features = encode_input(
+                gender, age, height, weight, history, favc, fcvc, ncp,
+                caec, smoke, ch2o, scc, faf, tue, calc, mtrans
+            )
+            input_df = pd.DataFrame([features], columns=[
+                'Gender', 'Age', 'Height', 'Weight',
+                'family_history_with_overweight', 'FAVC', 'FCVC', 'NCP',
+                'CAEC', 'SMOKE', 'CH2O', 'SCC', 'FAF', 'TUE', 'CALC', 'MTRANS'
+            ])
 
-if submitted:
-    # Format data sesuai format backend
-    input_data = {
-        "Age": age,
-        "Height": height,
-        "Weight": weight,
-        "FCVC": fcvc,
-        "NCP": ncp,
-        "CAEC": caec,
-        "CH2O": ch2o,
-        "FAF": faf,
-        "TUE": tue
-    }
+            prediction = model.predict(input_df)[0]
 
-    input_df = pd.DataFrame([input_data])
+            # Mapping hasil prediksi
+            obesity_levels = {
+                0: "Normal Weight",
+                1: "Overweight Level I", 
+                2: "Overweight Level II",
+                3: "Obesity Type I", 
+                4: "Obesity Type II",
+                5: "Obesity Type III",
+                6: "Insufficient Weight"
+            }
 
-    #catcols = ['Gender', 'family_history_with_overweight', 'FAVC', 'CAEC',
-    #       'SMOKE', 'SCC', 'CALC', 'MTRANS']
-    #for col in catcols:
-     #   input_df[col] = input_df[col].astype('category')
+            result = obesity_levels.get(prediction, f"Level {prediction}")
+            st.success(f"Hasil Prediksi: {result}")
 
+        except Exception as e:
+            st.error(f"❌ Terjadi Error: {str(e)}")
 
-    pred = model.predict(input_df)[0]
-
-    st.subheader("Hasil Prediksi:")
-    st.success(f"Tingkat obesitas: {pred}")
-
-    if pred == 1:
-        st.success("APPROVE")
-    else:
-        st.error("REJECTED")
+if __name__ == '__main__':
+    main()
